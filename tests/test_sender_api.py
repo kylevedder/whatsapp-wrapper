@@ -40,6 +40,15 @@ class RecordingSender(WhatsAppSender):
     def _wait_for_prefilled_text(self):
         self.calls.append("wait_prefill")
 
+    def _wait_for_direct_chat(self):
+        self.calls.append("wait_direct")
+
+    def _wait_for_attachment_preview(self):
+        self.calls.append("wait_preview")
+
+    def _wait_for_caption_text(self):
+        self.calls.append("wait_caption")
+
     def _press_return(self):
         self.calls.append("return")
 
@@ -105,14 +114,18 @@ def test_file_send_pastes_after_ax_confirmation(monkeypatch, tmp_path):
         "wait",
         "ax:1",
         "clear_reply",
+        "open_direct:15550100001@s.whatsapp.net:",
+        "wait_direct",
         "paste_files:note.txt",
+        "wait_preview",
         "paste_text:caption",
+        "wait_caption",
         "return",
     ]
 
 
-def test_file_send_does_not_continue_when_ax_tree_is_opaque(monkeypatch, tmp_path):
-    class OpaqueFileSender(RecordingSender):
+def test_direct_file_send_can_continue_when_ax_tree_is_opaque(monkeypatch, tmp_path):
+    class OpaqueDirectFileSender(RecordingSender):
         def _assert_focused_chat(self, chat):
             self.calls.append(f"ax_fail:{chat.id}")
             raise WhatsAppError("AX confirmation failed; focused WhatsApp chat did not match target")
@@ -120,13 +133,25 @@ def test_file_send_does_not_continue_when_ax_tree_is_opaque(monkeypatch, tmp_pat
     monkeypatch.setattr("whatsapp_wrapper.sender.platform.system", lambda: "Darwin")
     file_path = tmp_path / "note.txt"
     file_path.write_text("fake attachment")
-    sender = OpaqueFileSender()
+    sender = OpaqueDirectFileSender()
     chat = Chat(id=1, jid=Jid.parse("15550100001@s.whatsapp.net"), name="Alex Example", display_name="Alex Example")
 
-    with pytest.raises(WhatsAppError):
-        sender.send(chat=chat, text="caption", file_paths=[file_path], dry_run=False)
+    result = sender.send(chat=chat, text="caption", file_paths=[file_path], dry_run=False)
 
-    assert sender.calls == ["open_direct:15550100001@s.whatsapp.net:", "wait", "ax_fail:1"]
+    assert result.sent is True
+    assert sender.calls == [
+        "open_direct:15550100001@s.whatsapp.net:",
+        "wait",
+        "ax_fail:1",
+        "clear_reply",
+        "open_direct:15550100001@s.whatsapp.net:",
+        "wait_direct",
+        "paste_files:note.txt",
+        "wait_preview",
+        "paste_text:caption",
+        "wait_caption",
+        "return",
+    ]
 
 
 def test_group_send_requires_experimental_flag(monkeypatch):
@@ -139,6 +164,24 @@ def test_group_send_requires_experimental_flag(monkeypatch):
 
     sender.send(chat=chat, text="hello", allow_experimental_group=True)
     assert sender.calls == ["open_group:2", "wait", "ax:2", "clear_reply", "paste_text:hello", "return"]
+
+
+def test_group_file_send_does_not_continue_when_ax_tree_is_opaque(monkeypatch, tmp_path):
+    class OpaqueGroupFileSender(RecordingSender):
+        def _assert_focused_chat(self, chat):
+            self.calls.append(f"ax_fail:{chat.id}")
+            raise WhatsAppError("AX confirmation failed; focused WhatsApp chat did not match target")
+
+    monkeypatch.setattr("whatsapp_wrapper.sender.platform.system", lambda: "Darwin")
+    file_path = tmp_path / "note.txt"
+    file_path.write_text("fake attachment")
+    sender = OpaqueGroupFileSender()
+    chat = Chat(id=2, jid=Jid.parse("120363000000000001@g.us"), name="Project Group", display_name="Project Group", kind="group")
+
+    with pytest.raises(WhatsAppError):
+        sender.send(chat=chat, text="caption", file_paths=[file_path], dry_run=False, allow_experimental_group=True)
+
+    assert sender.calls == ["open_group:2", "wait", "ax_fail:2"]
 
 
 def test_client_dry_run_uses_sender_without_verification(tmp_path):

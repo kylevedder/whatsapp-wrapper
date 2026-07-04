@@ -51,6 +51,7 @@ class WhatsAppSender:
             raise core.WhatsAppError("WhatsApp send automation is only supported on macOS")
 
         direct_text_jid: Jid | None = None
+        direct_file_jid: Jid | None = None
         if chat.kind == "group":
             if not allow_experimental_group:
                 raise core.WhatsAppError("group sends require allow_experimental_group=True")
@@ -62,12 +63,14 @@ class WhatsAppSender:
             self._open_direct_chat(jid)
             if text and not files:
                 direct_text_jid = jid
+            if files:
+                direct_file_jid = jid
 
         self._wait_for_app()
         try:
             self._assert_focused_chat(chat)
         except core.WhatsAppError:
-            if direct_text_jid is None:
+            if direct_text_jid is None and direct_file_jid is None:
                 raise
         self._clear_reply_context()
 
@@ -76,9 +79,14 @@ class WhatsAppSender:
             self._wait_for_prefilled_text()
             self._press_return()
         elif files:
+            if direct_file_jid is not None:
+                self._open_direct_chat(direct_file_jid)
+                self._wait_for_direct_chat()
             self._paste_files(files)
+            self._wait_for_attachment_preview()
             if text:
                 self._paste_text(text)
+                self._wait_for_caption_text()
             self._press_return()
         else:
             self._paste_text(text)
@@ -224,6 +232,15 @@ class WhatsAppSender:
 
     def _wait_for_prefilled_text(self) -> None:
         time.sleep(2.0)
+
+    def _wait_for_direct_chat(self) -> None:
+        time.sleep(1.0)
+
+    def _wait_for_attachment_preview(self) -> None:
+        time.sleep(2.0)
+
+    def _wait_for_caption_text(self) -> None:
+        time.sleep(0.5)
 
     def _press_return(self) -> None:
         self._run_osascript(
