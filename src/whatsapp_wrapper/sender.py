@@ -58,12 +58,11 @@ class WhatsAppSender:
             jid = chat.jid
             if not jid or not jid.phone:
                 raise core.WhatsAppError("direct sends require a phone JID or phone number")
-            # Text-only sends use click-to-chat with text prefilled. File sends open
-            # the chat first so pasteboard files are never posted to the wrong row.
-            self._open_direct_chat(jid, text if not files else "")
+            self._open_direct_chat(jid)
 
         self._wait_for_app()
         self._assert_focused_chat(chat)
+        self._clear_reply_context()
 
         if files:
             self._paste_files(files)
@@ -71,6 +70,7 @@ class WhatsAppSender:
                 self._paste_text(text)
             self._press_return()
         else:
+            self._paste_text(text)
             self._press_return()
 
         return SendResult(
@@ -199,6 +199,18 @@ class WhatsAppSender:
             ]
         )
 
+    def _clear_reply_context(self) -> None:
+        self._run_osascript(
+            [
+                'tell application "System Events"',
+                f'  tell process "{self.app_name}"',
+                "    key code 53",
+                "    delay 0.1",
+                "  end tell",
+                "end tell",
+            ]
+        )
+
     def _press_return(self) -> None:
         self._run_osascript(
             [
@@ -229,4 +241,3 @@ class WhatsAppSender:
         escaped = value.replace("\\", "\\\\").replace('"', '\\"')
         escaped = escaped.replace("\n", "\\n")
         return f'"{escaped}"'
-

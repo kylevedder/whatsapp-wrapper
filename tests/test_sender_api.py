@@ -34,6 +34,9 @@ class RecordingSender(WhatsAppSender):
     def _paste_text(self, text):
         self.calls.append(f"paste_text:{text}")
 
+    def _clear_reply_context(self):
+        self.calls.append("clear_reply")
+
     def _press_return(self):
         self.calls.append("return")
 
@@ -47,12 +50,16 @@ def test_direct_text_send_requires_ax_before_return(monkeypatch):
 
     assert result.sent is True
     assert sender.calls == [
-        "open_direct:15550100001@s.whatsapp.net:hello",
+        "open_direct:15550100001@s.whatsapp.net:",
         "wait",
         "ax:1",
+        "clear_reply",
+        "paste_text:hello",
         "return",
     ]
     assert sender.calls.index("ax:1") < sender.calls.index("return")
+    assert sender.calls.index("clear_reply") < sender.calls.index("paste_text:hello")
+    assert sender.calls.index("paste_text:hello") < sender.calls.index("return")
 
 
 def test_file_send_pastes_after_ax_confirmation(monkeypatch, tmp_path):
@@ -68,6 +75,7 @@ def test_file_send_pastes_after_ax_confirmation(monkeypatch, tmp_path):
         "open_direct:15550100001@s.whatsapp.net:",
         "wait",
         "ax:1",
+        "clear_reply",
         "paste_files:note.txt",
         "paste_text:caption",
         "return",
@@ -83,7 +91,7 @@ def test_group_send_requires_experimental_flag(monkeypatch):
         sender.send(chat=chat, text="hello")
 
     sender.send(chat=chat, text="hello", allow_experimental_group=True)
-    assert sender.calls[:3] == ["open_group:2", "wait", "ax:2"]
+    assert sender.calls == ["open_group:2", "wait", "ax:2", "clear_reply", "paste_text:hello", "return"]
 
 
 def test_client_dry_run_uses_sender_without_verification(tmp_path):
