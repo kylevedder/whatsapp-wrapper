@@ -28,8 +28,24 @@ def find_whatsapp_app(app_path: str | Path | None = None) -> PermissionStatus:
     for candidate in candidates:
         if candidate.exists():
             return PermissionStatus("whatsapp_app", True, str(candidate))
+    if platform.system() == "Darwin" and shutil.which("mdfind"):
+        try:
+            result = subprocess.run(
+                ["/usr/bin/mdfind", 'kMDItemCFBundleIdentifier == "net.whatsapp.WhatsApp"'],
+                text=True,
+                capture_output=True,
+                timeout=5,
+                check=False,
+            )
+        except Exception:
+            result = None
+        if result and result.returncode == 0:
+            for line in result.stdout.splitlines():
+                candidate = Path(line.strip())
+                if candidate.name == "WhatsApp.app" and candidate.exists():
+                    return PermissionStatus("whatsapp_app", True, str(candidate))
     if shutil.which("open"):
-        return PermissionStatus("whatsapp_app", True, "open can resolve WhatsApp.app if installed")
+        return PermissionStatus("whatsapp_app", True, "open can launch whatsapp:// URLs when WhatsApp Desktop is installed")
     return PermissionStatus("whatsapp_app", False, "WhatsApp.app was not found")
 
 
@@ -86,4 +102,3 @@ def diagnostics(chat_db_path: str | Path, app_path: str | Path | None = None) ->
         accessibility_status(),
         automation_status(),
     ]
-

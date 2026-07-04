@@ -333,7 +333,10 @@ class WhatsAppClient:
 
     def resolve_contact(self, value: str | Jid) -> Contact | None:
         jid = Jid.parse(value)
-        index = self._contact_index if self._contact_index is not None else self._build_contact_index(self.contacts())
+        try:
+            index = self._contact_index if self._contact_index is not None else self._build_contact_index(self.contacts())
+        except core.WhatsAppError:
+            return None
         if jid:
             for key in jid.equivalent_keys():
                 if key.casefold() in index:
@@ -680,7 +683,11 @@ class WhatsAppClient:
 
     def _contacts_from_chats(self) -> list[Contact]:
         contacts: list[Contact] = []
-        for chat in self.chats(limit=5000):
+        try:
+            chats = self.chats(limit=5000)
+        except core.WhatsAppError:
+            return []
+        for chat in chats:
             if chat.kind != "direct" or not chat.jid:
                 continue
             display = chat.display_name or (f"+{chat.jid.phone}" if chat.jid.phone else chat.jid.raw)
@@ -785,6 +792,12 @@ class WhatsAppClient:
                 raise core.WhatsAppError(f"chat_id not found: {chat_id}")
             return target
         target_jid = Jid.parse(jid) if jid is not None else None
+        if not target_jid and to:
+            phone = core.normalize_phone(to, self.region)
+            target_jid = Jid.parse(phone) if phone else None
+        if not target_jid and to:
+            candidate = Jid.parse(to)
+            target_jid = candidate if candidate and (candidate.phone or candidate.lid or candidate.kind == "group") else None
         if to:
             contact = self.resolve_contact(to)
             if contact:
@@ -792,12 +805,12 @@ class WhatsAppClient:
         if not target_jid:
             phone = core.normalize_phone(to or str(jid or ""), self.region)
             target_jid = Jid.parse(phone) if phone else None
-        if not target_jid and to:
-            candidate = Jid.parse(to)
-            target_jid = candidate if candidate and (candidate.phone or candidate.lid or candidate.kind == "group") else None
         if not target_jid:
             raise core.WhatsAppError("could not resolve send target")
-        existing = self.chat(jid=target_jid)
+        try:
+            existing = self.chat(jid=target_jid)
+        except core.WhatsAppError:
+            existing = None
         if existing:
             return existing
         if target_jid.kind != "phone":
@@ -808,7 +821,22 @@ class WhatsAppClient:
         deadline = time.monotonic() + self.verification_timeout
         last_seen = after_rowid
         while time.monotonic() < deadline:
-            for message in self.messages_after(last_seen, chat_id=chat.id if chat.id > 0 else None, limit=50):
+            try:
+                batch = self.messages_after(last_seen, chat_id=chat.id if chat.id > 0 else None, limit=50)
+            except core.WhatsAppError as exc:
+                return SendResult(
+                    recipient=result.recipient,
+                    text=result.text,
+                    file_paths=result.file_paths,
+                    sent=True,
+                    verified=False,
+                    delivery_status="sent_unverified",
+                    dry_run=False,
+                    chat_id=result.chat_id,
+                    error=f"verification unavailable: {exc}",
+                    raw=result.raw,
+                )
+            for message in batch:
                 last_seen = max(last_seen, message.id)
                 if not message.is_from_me:
                     continue

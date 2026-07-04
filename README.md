@@ -38,6 +38,8 @@ Actually sending requires WhatsApp.app on macOS, Accessibility/Automation permis
 client.send(to="+15550100001", text="Running five minutes late", verify=True)
 ```
 
+WhatsApp Desktop does not need to already be open for direct sends. The wrapper launches it with a `whatsapp://send?...` URL, waits for the app, AX-confirms the focused chat, and then presses Return. Explicit phone-number sends can be attempted even when the local SQLite cache is unavailable; name/contact lookup and verification require WhatsApp Desktop to have created and synced its local databases.
+
 ## Data Locations
 
 The default discovery path is:
@@ -90,4 +92,3 @@ The test suite uses only synthetic SQLite fixtures with fake names, `+155501...`
 ```bash
 uv run pytest
 ```
-

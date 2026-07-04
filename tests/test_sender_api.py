@@ -98,6 +98,30 @@ def test_client_dry_run_uses_sender_without_verification(tmp_path):
     assert sender.calls == []
 
 
+def test_direct_phone_dry_run_does_not_require_local_database(tmp_path):
+    client = WhatsAppClient(data_root=tmp_path / "missing-whatsapp-data")
+
+    result = client.send(to="+1 (555) 010-0001", text="preview", dry_run=True)
+
+    assert result.dry_run is True
+    assert result.recipient == "15550100001@s.whatsapp.net"
+
+
+def test_direct_phone_send_degrades_to_unverified_without_database(tmp_path):
+    class SentSender:
+        def send(self, *, chat, text, file_paths, dry_run, allow_experimental_group):
+            return SendResult(recipient=chat.identifier, text=text, sent=True, verified=None, delivery_status="sent_unverified")
+
+    client = WhatsAppClient(data_root=tmp_path / "missing-whatsapp-data", sender=SentSender(), verification_timeout=0.1)
+
+    result = client.send(to="+1 (555) 010-0001", text="sent", verify=True)
+
+    assert result.sent is True
+    assert result.verified is False
+    assert result.delivery_status == "sent_unverified"
+    assert result.error and result.error.startswith("verification unavailable:")
+
+
 def test_client_verifies_sent_row_from_database(tmp_path):
     data_root = _send_fixture(tmp_path)
 
@@ -165,4 +189,3 @@ def _send_fixture(tmp_path):
     conn.commit()
     conn.close()
     return data_root
-
