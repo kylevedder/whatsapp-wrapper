@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from whatsapp_wrapper import Chat, Jid, SendResult, WhatsAppClient, WhatsAppError
-from whatsapp_wrapper.core import datetime_to_whatsapp_timestamp
+from whatsapp_wrapper.core import datetime_to_whatsapp_timestamp, sent_text_matches
 from whatsapp_wrapper.sender import WhatsAppSender
 
 
@@ -210,6 +210,51 @@ def test_client_verifies_sent_row_from_database(tmp_path):
     assert result.delivery_status == "sent"
     assert result.message_id == 2
     assert result.stanza_id == "stanza-verified"
+
+
+def test_client_verifies_sent_row_after_whatsapp_smiley_normalization(tmp_path):
+    data_root = _send_fixture(tmp_path)
+
+    class SmileyNormalizingSender:
+        def send(self, *, chat, text, file_paths, dry_run, allow_experimental_group):
+            conn = sqlite3.connect(data_root / "ChatStorage.sqlite")
+            conn.execute(
+                "INSERT INTO ZWAMESSAGE VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    2,
+                    1,
+                    None,
+                    1,
+                    datetime_to_whatsapp_timestamp(
+                        __import__("datetime").datetime(2026, 1, 1, 12, tzinfo=__import__("datetime").timezone.utc)
+                    ),
+                    text.replace(":)", "🙂"),
+                    "stanza-smiley",
+                    0,
+                    0,
+                    0,
+                    None,
+                ),
+            )
+            conn.commit()
+            conn.close()
+            return SendResult(recipient=chat.identifier, text=text, sent=True, verified=None, delivery_status="sent_unverified", chat_id=chat.id)
+
+    client = WhatsAppClient(data_root=data_root, sender=SmileyNormalizingSender(), verification_timeout=0.5)
+
+    result = client.send(chat_id=1, text="nice work :)", verify=True)
+
+    assert result.sent is True
+    assert result.verified is True
+    assert result.delivery_status == "sent"
+    assert result.message_id == 2
+    assert result.raw["verified_message"]["text"] == "nice work 🙂"
+
+
+def test_sent_text_matcher_is_not_fuzzy():
+    assert sent_text_matches("nice work :)", "nice work 🙂") is True
+    assert sent_text_matches("nice work :)", "nice work :) extra") is False
+    assert sent_text_matches("nice work", "not nice work") is False
 
 
 def _send_fixture(tmp_path):

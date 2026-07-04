@@ -860,7 +860,7 @@ class WhatsAppClient:
                     continue
                 if chat.id <= 0 and chat.jid and message.chat_jid and not set(chat.jid.equivalent_keys()).intersection(message.chat_jid.equivalent_keys()):
                     continue
-                if text and text not in message.text:
+                if not core.sent_text_matches(text, message.text):
                     continue
                 return SendResult(
                     recipient=result.recipient,

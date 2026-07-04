@@ -85,7 +85,7 @@ The sender does not insert rows into `ChatStorage.sqlite`.
 - Direct text sends open `whatsapp://send?phone=<digits>` without text, wait for WhatsApp.app, AX-confirm the focused chat when possible, clear transient composer reply state, reopen `whatsapp://send?phone=<digits>&text=<encoded>`, then press Return.
 - Direct file sends open the direct chat, AX-confirm it, clear transient composer reply state, place file URLs on the pasteboard, paste, optionally paste/type caption text, then press Return.
 - Group sends are experimental, require `allow_experimental_group=True`, and route by existing `chat_id` only.
-- Verification polls `ChatStorage.sqlite` for a new outgoing row in the target chat. If UI automation appears to complete but the database does not update before timeout, the result is `sent_unverified`.
+- Verification polls `ChatStorage.sqlite` for a new outgoing row in the target chat. It compares a conservative normalized form of the outbound text so common WhatsApp rewrites, such as `:)` becoming `🙂`, still verify. If UI automation appears to complete but the database does not update before timeout, the result is `sent_unverified`.
 
 ## Tests
 

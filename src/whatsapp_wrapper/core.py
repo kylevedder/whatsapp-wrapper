@@ -267,6 +267,30 @@ def whatsapp_message_display_text(raw_type: Any, text: str | None) -> str:
     return WHATSAPP_MESSAGE_TYPE_DISPLAY_TEXT.get(message_type, body)
 
 
+WHATSAPP_SEND_TEXT_REPLACEMENTS: tuple[tuple[str, str], ...] = (
+    (":)", "🙂"),
+    (":-)", "🙂"),
+)
+
+
+def normalize_sent_text_for_verification(value: str | None) -> str:
+    text = unicodedata.normalize("NFC", str(value or ""))
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    for before, after in WHATSAPP_SEND_TEXT_REPLACEMENTS:
+        text = text.replace(before, after)
+    return text
+
+
+def sent_text_matches(expected: str | None, actual: str | None) -> bool:
+    expected_text = str(expected or "")
+    if not expected_text:
+        return True
+    actual_text = str(actual or "")
+    if expected_text == actual_text:
+        return True
+    return normalize_sent_text_for_verification(expected_text) == normalize_sent_text_for_verification(actual_text)
+
+
 def safe_resolve_media_path(raw_path: str | None, media_root: str | Path) -> str | None:
     if not raw_path:
         return None
