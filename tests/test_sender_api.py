@@ -37,6 +37,9 @@ class RecordingSender(WhatsAppSender):
     def _clear_reply_context(self):
         self.calls.append("clear_reply")
 
+    def _wait_for_prefilled_text(self):
+        self.calls.append("wait_prefill")
+
     def _press_return(self):
         self.calls.append("return")
 
@@ -55,11 +58,13 @@ def test_direct_text_send_requires_ax_before_return(monkeypatch):
         "ax:1",
         "clear_reply",
         "open_direct:15550100001@s.whatsapp.net:hello",
+        "wait_prefill",
         "return",
     ]
     assert sender.calls.index("ax:1") < sender.calls.index("return")
     assert sender.calls.index("clear_reply") < sender.calls.index("open_direct:15550100001@s.whatsapp.net:hello")
-    assert sender.calls.index("open_direct:15550100001@s.whatsapp.net:hello") < sender.calls.index("return")
+    assert sender.calls.index("open_direct:15550100001@s.whatsapp.net:hello") < sender.calls.index("wait_prefill")
+    assert sender.calls.index("wait_prefill") < sender.calls.index("return")
 
 
 def test_direct_text_send_can_continue_when_ax_tree_is_opaque(monkeypatch):
@@ -81,6 +86,7 @@ def test_direct_text_send_can_continue_when_ax_tree_is_opaque(monkeypatch):
         "ax_fail:1",
         "clear_reply",
         "open_direct:15550100001@s.whatsapp.net:hello",
+        "wait_prefill",
         "return",
     ]
 

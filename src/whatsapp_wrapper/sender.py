@@ -73,7 +73,7 @@ class WhatsAppSender:
 
         if direct_text_jid is not None:
             self._open_direct_chat(direct_text_jid, text)
-            time.sleep(0.75)
+            self._wait_for_prefilled_text()
             self._press_return()
         elif files:
             self._paste_files(files)
@@ -221,6 +221,9 @@ class WhatsAppSender:
                 "end tell",
             ]
         )
+
+    def _wait_for_prefilled_text(self) -> None:
+        time.sleep(2.0)
 
     def _press_return(self) -> None:
         self._run_osascript(
