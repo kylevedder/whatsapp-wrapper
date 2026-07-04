@@ -195,12 +195,12 @@ class WhatsAppClient:
             )
             return [self._row_to_message(conn, row, include_attachments=attachments) for row in rows]
 
-    def messages_after(self, rowid: int, chat_id: int | None = None, limit: int = 100) -> list[Message]:
+    def messages_after(self, rowid: int, chat_id: int | None = None, limit: int = 100, attachments: bool = False) -> list[Message]:
         if limit < 1:
             raise ValueError("limit must be >= 1")
         with self._connect_chat() as conn:
             rows = self._message_rows(conn, chat_id=chat_id, after_rowid=rowid, limit=limit, ascending=True, include_deleted=True)
-            return [self._row_to_message(conn, row, include_attachments=False) for row in rows]
+            return [self._row_to_message(conn, row, include_attachments=attachments) for row in rows]
 
     def iter_messages(
         self,
@@ -579,9 +579,10 @@ class WhatsAppClient:
             return []
         cols = self._columns(conn, "ZWAMEDIAITEM")
         message_fk = self._first_col(cols, ["ZMESSAGE", "ZMESSAGE1", "ZOWNER", "ZMESSAGEITEM"])
-        path_expr = self._expr("mi", cols, ["ZMEDIAURL", "ZLOCALPATH", "ZPATH", "ZFILENAME", "ZFILEPATH"], "NULL")
-        filename_expr = self._expr("mi", cols, ["ZFILENAME", "ZFILE", "ZVCARDNAME", "ZTITLE"], "NULL")
-        mime_expr = self._expr("mi", cols, ["ZMIMETYPE", "ZCONTENTTYPE", "ZUTI"], "NULL")
+        path_expr = self._expr("mi", cols, ["ZMEDIALOCALPATH", "ZLOCALPATH", "ZPATH", "ZFILEPATH", "ZMEDIAURL", "ZFILENAME"], "NULL")
+        filename_expr = self._expr("mi", cols, ["ZFILENAME", "ZFILE", "ZORIGINALFILENAME"], "NULL")
+        caption_expr = self._expr("mi", cols, ["ZTITLE", "ZCAPTION", "ZMEDIACAPTION"], "NULL")
+        mime_expr = self._expr("mi", cols, ["ZMIMETYPE", "ZCONTENTTYPE", "ZVCARDSTRING", "ZUTI"], "NULL")
         size_expr = self._expr("mi", cols, ["ZFILESIZE", "ZBYTESIZE", "ZSIZE"], "NULL")
         kind_expr = self._expr("mi", cols, ["ZMEDIATYPE", "ZTYPE"], "NULL")
         filters: list[str] = []
@@ -600,6 +601,7 @@ class WhatsAppClient:
                 mi.Z_PK AS media_id,
                 {path_expr} AS raw_path,
                 {filename_expr} AS filename,
+                {caption_expr} AS caption,
                 {mime_expr} AS mime_type,
                 {size_expr} AS byte_size,
                 {kind_expr} AS media_kind
@@ -618,6 +620,7 @@ class WhatsAppClient:
                     message_id=message_id,
                     filename=row["filename"],
                     path=safe_path,
+                    caption=row["caption"],
                     mime_type=row["mime_type"],
                     byte_size=int(row["byte_size"]) if row["byte_size"] is not None else None,
                     media_kind=str(row["media_kind"]) if row["media_kind"] is not None else None,
@@ -838,7 +841,7 @@ class WhatsAppClient:
         last_seen = after_rowid
         while time.monotonic() < deadline:
             try:
-                batch = self.messages_after(last_seen, chat_id=chat.id if chat.id > 0 else None, limit=50)
+                batch = self.messages_after(last_seen, chat_id=chat.id if chat.id > 0 else None, limit=50, attachments=bool(result.file_paths))
             except core.WhatsAppError as exc:
                 return SendResult(
                     recipient=result.recipient,
@@ -860,7 +863,7 @@ class WhatsAppClient:
                     continue
                 if chat.id <= 0 and chat.jid and message.chat_jid and not set(chat.jid.equivalent_keys()).intersection(message.chat_jid.equivalent_keys()):
                     continue
-                if not core.sent_text_matches(text, message.text):
+                if not self._message_text_matches_verification(message, text):
                     continue
                 return SendResult(
                     recipient=result.recipient,
@@ -888,6 +891,12 @@ class WhatsAppClient:
             error="verification timed out",
             raw=result.raw,
         )
+
+    @staticmethod
+    def _message_text_matches_verification(message: Message, text: str) -> bool:
+        if core.sent_text_matches(text, message.text):
+            return True
+        return any(core.sent_text_matches(text, attachment.caption) for attachment in message.attachments)
 
     def _max_message_rowid(self) -> int:
         try:

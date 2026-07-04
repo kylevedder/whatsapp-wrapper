@@ -49,6 +49,9 @@ class RecordingSender(WhatsAppSender):
     def _wait_for_caption_text(self):
         self.calls.append("wait_caption")
 
+    def _focus_composer_area(self):
+        self.calls.append("focus_composer")
+
     def _press_return(self):
         self.calls.append("return")
 
@@ -116,6 +119,7 @@ def test_file_send_pastes_after_ax_confirmation(monkeypatch, tmp_path):
         "clear_reply",
         "open_direct:15550100001@s.whatsapp.net:",
         "wait_direct",
+        "focus_composer",
         "paste_files:note.txt",
         "wait_preview",
         "paste_text:caption",
@@ -146,6 +150,7 @@ def test_direct_file_send_can_continue_when_ax_tree_is_opaque(monkeypatch, tmp_p
         "clear_reply",
         "open_direct:15550100001@s.whatsapp.net:",
         "wait_direct",
+        "focus_composer",
         "paste_files:note.txt",
         "wait_preview",
         "paste_text:caption",
@@ -300,6 +305,59 @@ def test_client_verifies_sent_row_after_whatsapp_smiley_normalization(tmp_path):
     assert result.raw["verified_message"]["text"] == "nice work 🙂"
 
 
+def test_client_verifies_file_send_by_media_caption(tmp_path):
+    data_root = _send_fixture(tmp_path)
+
+    class MediaCaptionSender:
+        def send(self, *, chat, text, file_paths, dry_run, allow_experimental_group):
+            conn = sqlite3.connect(data_root / "ChatStorage.sqlite")
+            conn.execute(
+                "INSERT INTO ZWAMEDIAITEM VALUES (?, ?, ?, ?, ?, ?)",
+                (1, 2, "Media/example.jpg", text, "image/jpeg", 123),
+            )
+            conn.execute(
+                "INSERT INTO ZWAMESSAGE VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    2,
+                    1,
+                    None,
+                    1,
+                    datetime_to_whatsapp_timestamp(
+                        __import__("datetime").datetime(2026, 1, 1, 12, tzinfo=__import__("datetime").timezone.utc)
+                    ),
+                    None,
+                    "stanza-media-caption",
+                    1,
+                    0,
+                    0,
+                    1,
+                ),
+            )
+            conn.commit()
+            conn.close()
+            return SendResult(
+                recipient=chat.identifier,
+                text=text,
+                file_paths=list(file_paths),
+                sent=True,
+                verified=None,
+                delivery_status="sent_unverified",
+                chat_id=chat.id,
+            )
+
+    attachment = tmp_path / "example.jpg"
+    attachment.write_bytes(b"fake image")
+    client = WhatsAppClient(data_root=data_root, sender=MediaCaptionSender(), verification_timeout=0.5)
+
+    result = client.send(chat_id=1, text="media caption", file_paths=[attachment], verify=True)
+
+    assert result.sent is True
+    assert result.verified is True
+    assert result.delivery_status == "sent"
+    assert result.message_id == 2
+    assert result.raw["verified_message"]["attachments"][0]["caption"] == "media caption"
+
+
 def test_sent_text_matcher_is_not_fuzzy():
     assert sent_text_matches("nice work :)", "nice work 🙂") is True
     assert sent_text_matches("nice work :)", "nice work :) extra") is False
@@ -334,6 +392,14 @@ def _send_fixture(tmp_path):
             ZSTARRED INTEGER,
             ZDELETED INTEGER,
             ZMEDIAITEM INTEGER
+        );
+        CREATE TABLE ZWAMEDIAITEM (
+            Z_PK INTEGER PRIMARY KEY,
+            ZMESSAGE INTEGER,
+            ZMEDIALOCALPATH TEXT,
+            ZTITLE TEXT,
+            ZVCARDSTRING TEXT,
+            ZFILESIZE INTEGER
         );
         """
     )

@@ -53,6 +53,7 @@ def whatsapp_fixture(tmp_path):
             ZMESSAGE INTEGER,
             ZMEDIAURL TEXT,
             ZFILENAME TEXT,
+            ZTITLE TEXT,
             ZMIMETYPE TEXT,
             ZFILESIZE INTEGER,
             ZMEDIATYPE INTEGER
@@ -81,10 +82,10 @@ def whatsapp_fixture(tmp_path):
         ],
     )
     conn.executemany(
-        "INSERT INTO ZWAMEDIAITEM VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO ZWAMEDIAITEM VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         [
-            (1, 2, "images/photo.jpg", "photo.jpg", "image/jpeg", 10, 1),
-            (2, 2, "../outside.txt", "outside.txt", "text/plain", 5, 1),
+            (1, 2, "images/photo.jpg", "photo.jpg", "photo caption", "image/jpeg", 10, 1),
+            (2, 2, "../outside.txt", "outside.txt", None, "text/plain", 5, 1),
         ],
     )
     conn.executemany(
@@ -196,6 +197,7 @@ def test_messages_filter_deleted_search_and_attachments(whatsapp_fixture):
     assert messages[0].is_from_me is True
     assert messages[0].is_starred is True
     assert messages[0].attachments[0].filename == "photo.jpg"
+    assert messages[0].attachments[0].caption == "photo caption"
     assert messages[0].attachments[0].path and messages[0].attachments[0].path.endswith("Message/images/photo.jpg")
     assert messages[0].attachments[1].path is None
     assert messages[0].attachments[1].missing is True
@@ -240,6 +242,7 @@ def test_iter_messages_messages_after_and_watch(whatsapp_fixture):
     client = WhatsAppClient(data_root=whatsapp_fixture)
 
     assert [message.id for message in client.messages_after(1, limit=2)] == [2, 3]
+    assert client.messages_after(1, limit=1, attachments=True)[0].attachments[0].caption == "photo caption"
     assert [message.id for message in client.iter_messages(page_size=2)] == [1, 2, 3]
 
     conn = sqlite3.connect(whatsapp_fixture / "ChatStorage.sqlite")

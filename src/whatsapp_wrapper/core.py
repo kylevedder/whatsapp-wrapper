@@ -294,6 +294,8 @@ def sent_text_matches(expected: str | None, actual: str | None) -> bool:
 def safe_resolve_media_path(raw_path: str | None, media_root: str | Path) -> str | None:
     if not raw_path:
         return None
+    if re.match(r"^[A-Za-z][A-Za-z0-9+.-]*://", str(raw_path)) and not str(raw_path).startswith("file://"):
+        return None
     root = Path(media_root).expanduser().resolve(strict=False)
     path = Path(str(raw_path).replace("file://", "")).expanduser()
     if not path.is_absolute():

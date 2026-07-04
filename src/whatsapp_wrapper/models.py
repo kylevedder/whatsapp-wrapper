@@ -87,6 +87,7 @@ class Attachment:
     message_id: int | None = None
     filename: str | None = None
     path: str | None = None
+    caption: str | None = None
     mime_type: str | None = None
     byte_size: int | None = None
     media_kind: str | None = None

@@ -76,16 +76,16 @@ Exported models:
 - `Contact`
 - `SendResult`
 
-`Message.text` preserves the raw message body from SQLite. `Message.display_text` provides a best-effort human-readable label for textless rows with known WhatsApp message types, such as media, URL, system-information, video-call, and disappearing-message rows. `Message.type_name` exposes the decoded type name while `Message.raw_type` keeps the original database value. The low-number type names come from public WhatsApp forensics references; newer Desktop/system labels are intentionally conservative and should be expanded only with UI or fixture evidence.
+`Message.text` preserves the raw message body from SQLite. `Message.display_text` provides a best-effort human-readable label for textless rows with known WhatsApp message types, such as media, URL, system-information, video-call, and disappearing-message rows. `Message.type_name` exposes the decoded type name while `Message.raw_type` keeps the original database value. Media captions are exposed as `Attachment.caption` because WhatsApp Desktop stores image captions on media metadata rows rather than `ZWAMESSAGE.ZTEXT`. The low-number type names come from public WhatsApp forensics references; newer Desktop/system labels are intentionally conservative and should be expanded only with UI or fixture evidence.
 
 ## Sending Policy
 
 The sender does not insert rows into `ChatStorage.sqlite`.
 
 - Direct text sends open `whatsapp://send?phone=<digits>` without text, wait for WhatsApp.app, AX-confirm the focused chat when possible, clear transient composer reply state, reopen `whatsapp://send?phone=<digits>&text=<encoded>`, wait for WhatsApp to populate the draft, then press Return.
-- Direct file sends open the direct chat, AX-confirm it when possible, clear transient composer reply state, reopen the direct URL, place file URLs on the pasteboard, wait for the media preview, optionally paste/type caption text, wait for the caption field, then press Return.
+- Direct file sends open the direct chat, AX-confirm it when possible, clear transient composer reply state, reopen the direct URL, focus the composer area, place file URLs on the pasteboard, wait for the media preview, optionally paste/type caption text, wait for the caption field, then press Return.
 - Group sends are experimental, require `allow_experimental_group=True`, and route by existing `chat_id` only.
-- Verification polls `ChatStorage.sqlite` for a new outgoing row in the target chat. It compares a conservative normalized form of the outbound text so common WhatsApp rewrites, such as `:)` becoming `🙂`, still verify. If UI automation appears to complete but the database does not update before timeout, the result is `sent_unverified`.
+- Verification polls `ChatStorage.sqlite` for a new outgoing row in the target chat. It compares a conservative normalized form of the outbound text so common WhatsApp rewrites, such as `:)` becoming `🙂`, still verify. For file sends, verification also loads media rows and checks attachment captions. If UI automation appears to complete but the database does not update before timeout, the result is `sent_unverified`.
 
 ## Tests
 

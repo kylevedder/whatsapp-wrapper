@@ -82,6 +82,7 @@ class WhatsAppSender:
             if direct_file_jid is not None:
                 self._open_direct_chat(direct_file_jid)
                 self._wait_for_direct_chat()
+            self._focus_composer_area()
             self._paste_files(files)
             self._wait_for_attachment_preview()
             if text:
@@ -242,6 +243,13 @@ class WhatsAppSender:
     def _wait_for_caption_text(self) -> None:
         time.sleep(0.5)
 
+    def _focus_composer_area(self) -> None:
+        left, top, width, height = self._window_position_and_size()
+        if width < 200 or height < 120:
+            raise core.WhatsAppError("WhatsApp window is too small to focus the composer safely")
+        self._click_screen_point(left + (width / 2), top + height - 35)
+        time.sleep(0.2)
+
     def _press_return(self) -> None:
         self._run_osascript(
             [
@@ -252,6 +260,52 @@ class WhatsAppSender:
                 "end tell",
             ]
         )
+
+    def _window_position_and_size(self) -> tuple[float, float, float, float]:
+        output = self._run_osascript(
+            [
+                f'tell application "{self.app_name}" to activate',
+                'tell application "System Events"',
+                f'  tell process "{self.app_name}"',
+                "    if not (exists window 1) then error \"WhatsApp has no front window\"",
+                "    set windowPosition to position of window 1",
+                "    set windowSize to size of window 1",
+                "    return (item 1 of windowPosition as text) & \",\" & (item 2 of windowPosition as text) & \",\" & (item 1 of windowSize as text) & \",\" & (item 2 of windowSize as text)",
+                "  end tell",
+                "end tell",
+            ]
+        )
+        try:
+            left, top, width, height = [float(part.strip()) for part in output.split(",")]
+        except ValueError as exc:
+            raise core.WhatsAppError(f"could not read WhatsApp window bounds: {output}") from exc
+        return left, top, width, height
+
+    def _click_screen_point(self, x: float, y: float) -> None:
+        self._run_jxa(
+            [
+                'ObjC.import("ApplicationServices");',
+                f"const point = $.CGPointMake({float(x):.2f}, {float(y):.2f});",
+                "const down = $.CGEventCreateMouseEvent(null, $.kCGEventLeftMouseDown, point, $.kCGMouseButtonLeft);",
+                "const up = $.CGEventCreateMouseEvent(null, $.kCGEventLeftMouseUp, point, $.kCGMouseButtonLeft);",
+                "$.CGEventPost($.kCGHIDEventTap, down);",
+                "$.CGEventPost($.kCGHIDEventTap, up);",
+            ]
+        )
+
+    def _run_jxa(self, lines: list[str]) -> str:
+        script = "\n".join(lines)
+        result = subprocess.run(
+            ["/usr/bin/osascript", "-l", "JavaScript", "-e", script],
+            text=True,
+            capture_output=True,
+            timeout=self.send_timeout,
+            check=False,
+        )
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout or "").strip() or "JXA osascript failed"
+            raise core.WhatsAppError(detail)
+        return result.stdout.strip()
 
     def _run_osascript(self, lines: list[str]) -> str:
         script = "\n".join(lines)
