@@ -215,6 +215,40 @@ def coerce_bool(value: Any) -> bool:
     return bool(value)
 
 
+WHATSAPP_MESSAGE_TYPE_NAMES: dict[int, str] = {
+    0: "text",
+    28: "disappearing_messages_notice",
+    59: "video_call",
+}
+
+
+WHATSAPP_MESSAGE_TYPE_DISPLAY_TEXT: dict[int, str] = {
+    28: "Disappearing messages setting changed",
+    59: "Video call",
+}
+
+
+def whatsapp_message_type_name(value: Any) -> str | None:
+    if value in (None, ""):
+        return None
+    try:
+        raw_type = int(value)
+    except (TypeError, ValueError):
+        return str(value)
+    return WHATSAPP_MESSAGE_TYPE_NAMES.get(raw_type, f"type_{raw_type}")
+
+
+def whatsapp_message_display_text(raw_type: Any, text: str | None) -> str:
+    body = str(text or "")
+    if body:
+        return body
+    try:
+        message_type = int(raw_type)
+    except (TypeError, ValueError):
+        return body
+    return WHATSAPP_MESSAGE_TYPE_DISPLAY_TEXT.get(message_type, body)
+
+
 def safe_resolve_media_path(raw_path: str | None, media_root: str | Path) -> str | None:
     if not raw_path:
         return None
@@ -228,4 +262,3 @@ def safe_resolve_media_path(raw_path: str | None, media_root: str | Path) -> str
     except ValueError:
         return None
     return str(resolved)
-

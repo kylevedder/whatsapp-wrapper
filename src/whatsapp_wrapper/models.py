@@ -145,6 +145,8 @@ class Message:
     chat_jid: Jid | None = None
     chat_name: str | None = None
     raw_type: int | str | None = None
+    type_name: str | None = None
+    display_text: str | None = None
     is_starred: bool = False
     is_deleted: bool = False
     contact: Contact | None = None

@@ -550,18 +550,23 @@ class WhatsAppClient:
         contact = self.resolve_contact(sender_jid) if self.enrich_contacts and sender_jid else None
         sender = "me" if core.coerce_bool(row["is_from_me"]) else (contact.display_name if contact else (sender_jid.raw if sender_jid else None))
         attachments = self._attachments_for_message(conn, int(row["rowid"]), row["media_item_id"]) if include_attachments else []
+        text = str(row["text"] or "")
+        type_name = core.whatsapp_message_type_name(row["raw_type"])
+        display_text = core.whatsapp_message_display_text(row["raw_type"], text)
         return Message(
             id=int(row["rowid"]),
             chat_id=int(row["chat_id"] or 0),
             stanza_id=row["stanza_id"],
             sender=sender,
-            text=str(row["text"] or ""),
+            text=text,
             created_at=core.whatsapp_timestamp_to_datetime(row["message_date"]),
             is_from_me=core.coerce_bool(row["is_from_me"]),
             sender_jid=sender_jid,
             chat_jid=chat_jid,
             chat_name=row["chat_name"],
             raw_type=row["raw_type"],
+            type_name=type_name,
+            display_text=display_text,
             is_starred=core.coerce_bool(row["is_starred"]),
             is_deleted=core.coerce_bool(row["is_deleted"]),
             contact=contact,

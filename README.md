@@ -76,6 +76,8 @@ Exported models:
 - `Contact`
 - `SendResult`
 
+`Message.text` preserves the raw message body from SQLite. `Message.display_text` provides a best-effort human-readable label for textless rows with known WhatsApp message types, such as video-call rows and disappearing-message notices. `Message.type_name` exposes the decoded type name while `Message.raw_type` keeps the original database value.
+
 ## Sending Policy
 
 The sender does not insert rows into `ChatStorage.sqlite`.
