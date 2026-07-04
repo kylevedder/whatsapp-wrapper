@@ -38,7 +38,7 @@ Actually sending requires WhatsApp.app on macOS, Accessibility/Automation permis
 client.send(to="+15550100001", text="Running five minutes late", verify=True)
 ```
 
-WhatsApp Desktop does not need to already be open for direct sends. The wrapper launches it with a `whatsapp://send?...` URL, waits for the app, AX-confirms the focused chat, clears transient composer reply state, pastes the outbound body, and then presses Return. Explicit phone-number sends can be attempted even when the local SQLite cache is unavailable; name/contact lookup and verification require WhatsApp Desktop to have created and synced its local databases.
+WhatsApp Desktop does not need to already be open for direct sends. The wrapper launches it with a `whatsapp://send?...` URL, waits for the app, AX-confirms the focused chat when WhatsApp exposes enough accessibility text, clears transient composer reply state, then reopens the direct URL with the outbound text prefilled and presses Return. Explicit phone-number sends can be attempted even when the local SQLite cache is unavailable; name/contact lookup and verification require WhatsApp Desktop to have created and synced its local databases.
 
 ## Data Locations
 
@@ -82,7 +82,7 @@ Exported models:
 
 The sender does not insert rows into `ChatStorage.sqlite`.
 
-- Direct text sends open `whatsapp://send?phone=<digits>` without a prefilled `text=` parameter, wait for WhatsApp.app, AX-confirm the focused chat, clear transient composer reply state, paste the body, then press Return.
+- Direct text sends open `whatsapp://send?phone=<digits>` without text, wait for WhatsApp.app, AX-confirm the focused chat when possible, clear transient composer reply state, reopen `whatsapp://send?phone=<digits>&text=<encoded>`, then press Return.
 - Direct file sends open the direct chat, AX-confirm it, clear transient composer reply state, place file URLs on the pasteboard, paste, optionally paste/type caption text, then press Return.
 - Group sends are experimental, require `allow_experimental_group=True`, and route by existing `chat_id` only.
 - Verification polls `ChatStorage.sqlite` for a new outgoing row in the target chat. If UI automation appears to complete but the database does not update before timeout, the result is `sent_unverified`.

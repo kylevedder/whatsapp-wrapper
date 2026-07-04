@@ -50,6 +50,7 @@ class WhatsAppSender:
         if platform.system() != "Darwin":
             raise core.WhatsAppError("WhatsApp send automation is only supported on macOS")
 
+        direct_text_jid: Jid | None = None
         if chat.kind == "group":
             if not allow_experimental_group:
                 raise core.WhatsAppError("group sends require allow_experimental_group=True")
@@ -59,12 +60,22 @@ class WhatsAppSender:
             if not jid or not jid.phone:
                 raise core.WhatsAppError("direct sends require a phone JID or phone number")
             self._open_direct_chat(jid)
+            if text and not files:
+                direct_text_jid = jid
 
         self._wait_for_app()
-        self._assert_focused_chat(chat)
+        try:
+            self._assert_focused_chat(chat)
+        except core.WhatsAppError:
+            if direct_text_jid is None:
+                raise
         self._clear_reply_context()
 
-        if files:
+        if direct_text_jid is not None:
+            self._open_direct_chat(direct_text_jid, text)
+            time.sleep(0.75)
+            self._press_return()
+        elif files:
             self._paste_files(files)
             if text:
                 self._paste_text(text)
