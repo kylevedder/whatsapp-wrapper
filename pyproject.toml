@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "whatsapp-wrapper"
+version = "0.1.0"
+description = "Read-only local WhatsApp Desktop API with guarded macOS send automation"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{name = "whatsapp-wrapper contributors"}]
+keywords = ["whatsapp", "macos", "messages", "sqlite", "automation"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Communications :: Chat",
+    "Typing :: Typed",
+]
+dependencies = [
+    "phonenumbers>=8.13",
+    "pyobjc-framework-Cocoa>=10.0; sys_platform == 'darwin'",
+]
+
+[project.urls]
+Homepage = "https://github.com/kylevedder/whatsapp-wrapper"
+Repository = "https://github.com/kylevedder/whatsapp-wrapper"
+Issues = "https://github.com/kylevedder/whatsapp-wrapper/issues"
+Source = "https://github.com/kylevedder/whatsapp-wrapper"
+
+[project.optional-dependencies]
+dev = [
+    "build>=1.2",
+    "pytest>=8.0",
+    "twine>=5.0",
+]
+
+[dependency-groups]
+dev = [
+    "build>=1.2",
+    "pytest>=8.0",
+    "twine>=5.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+whatsapp_wrapper = ["py.typed"]

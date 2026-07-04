@@ -1,0 +1,168 @@
+from __future__ import annotations
+
+import sqlite3
+from dataclasses import replace
+from pathlib import Path
+
+import pytest
+
+from whatsapp_wrapper import Chat, Jid, SendResult, WhatsAppClient, WhatsAppError
+from whatsapp_wrapper.core import datetime_to_whatsapp_timestamp
+from whatsapp_wrapper.sender import WhatsAppSender
+
+
+class RecordingSender(WhatsAppSender):
+    def __init__(self):
+        super().__init__()
+        self.calls: list[str] = []
+
+    def _open_direct_chat(self, jid, text=""):
+        self.calls.append(f"open_direct:{jid.raw}:{text}")
+
+    def _open_group_chat(self, chat):
+        self.calls.append(f"open_group:{chat.id}")
+
+    def _wait_for_app(self):
+        self.calls.append("wait")
+
+    def _assert_focused_chat(self, chat):
+        self.calls.append(f"ax:{chat.id}")
+
+    def _paste_files(self, file_paths):
+        self.calls.append("paste_files:" + ",".join(Path(path).name for path in file_paths))
+
+    def _paste_text(self, text):
+        self.calls.append(f"paste_text:{text}")
+
+    def _press_return(self):
+        self.calls.append("return")
+
+
+def test_direct_text_send_requires_ax_before_return(monkeypatch):
+    monkeypatch.setattr("whatsapp_wrapper.sender.platform.system", lambda: "Darwin")
+    sender = RecordingSender()
+    chat = Chat(id=1, jid=Jid.parse("15550100001@s.whatsapp.net"), name="Alex Example", display_name="Alex Example")
+
+    result = sender.send(chat=chat, text="hello", dry_run=False)
+
+    assert result.sent is True
+    assert sender.calls == [
+        "open_direct:15550100001@s.whatsapp.net:hello",
+        "wait",
+        "ax:1",
+        "return",
+    ]
+    assert sender.calls.index("ax:1") < sender.calls.index("return")
+
+
+def test_file_send_pastes_after_ax_confirmation(monkeypatch, tmp_path):
+    monkeypatch.setattr("whatsapp_wrapper.sender.platform.system", lambda: "Darwin")
+    file_path = tmp_path / "note.txt"
+    file_path.write_text("fake attachment")
+    sender = RecordingSender()
+    chat = Chat(id=1, jid=Jid.parse("15550100001@s.whatsapp.net"), name="Alex Example", display_name="Alex Example")
+
+    sender.send(chat=chat, text="caption", file_paths=[file_path], dry_run=False)
+
+    assert sender.calls == [
+        "open_direct:15550100001@s.whatsapp.net:",
+        "wait",
+        "ax:1",
+        "paste_files:note.txt",
+        "paste_text:caption",
+        "return",
+    ]
+
+
+def test_group_send_requires_experimental_flag(monkeypatch):
+    monkeypatch.setattr("whatsapp_wrapper.sender.platform.system", lambda: "Darwin")
+    sender = RecordingSender()
+    chat = Chat(id=2, jid=Jid.parse("120363000000000001@g.us"), name="Project Group", display_name="Project Group", kind="group")
+
+    with pytest.raises(WhatsAppError):
+        sender.send(chat=chat, text="hello")
+
+    sender.send(chat=chat, text="hello", allow_experimental_group=True)
+    assert sender.calls[:3] == ["open_group:2", "wait", "ax:2"]
+
+
+def test_client_dry_run_uses_sender_without_verification(tmp_path):
+    data_root = _send_fixture(tmp_path)
+    sender = RecordingSender()
+    client = WhatsAppClient(data_root=data_root, sender=sender)
+
+    result = client.send(chat_id=1, text="preview", dry_run=True)
+
+    assert result.dry_run is True
+    assert result.delivery_status == "dry_run"
+    assert sender.calls == []
+
+
+def test_client_verifies_sent_row_from_database(tmp_path):
+    data_root = _send_fixture(tmp_path)
+
+    class VerifyingSender:
+        def send(self, *, chat, text, file_paths, dry_run, allow_experimental_group):
+            conn = sqlite3.connect(data_root / "ChatStorage.sqlite")
+            conn.execute(
+                "INSERT INTO ZWAMESSAGE VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (2, 1, None, 1, datetime_to_whatsapp_timestamp(__import__("datetime").datetime(2026, 1, 1, 12, tzinfo=__import__("datetime").timezone.utc)), text, "stanza-verified", 0, 0, 0, None),
+            )
+            conn.commit()
+            conn.close()
+            return SendResult(recipient=chat.identifier, text=text, sent=True, verified=None, delivery_status="sent_unverified", chat_id=chat.id)
+
+    client = WhatsAppClient(data_root=data_root, sender=VerifyingSender(), verification_timeout=0.5)
+
+    result = client.send(chat_id=1, text="verified body", verify=True)
+
+    assert result.sent is True
+    assert result.verified is True
+    assert result.delivery_status == "sent"
+    assert result.message_id == 2
+    assert result.stanza_id == "stanza-verified"
+
+
+def _send_fixture(tmp_path):
+    data_root = tmp_path / "group.net.whatsapp.WhatsApp.shared"
+    data_root.mkdir()
+    conn = sqlite3.connect(data_root / "ChatStorage.sqlite")
+    conn.executescript(
+        """
+        CREATE TABLE ZWACHATSESSION (
+            Z_PK INTEGER PRIMARY KEY,
+            ZCONTACTJID TEXT,
+            ZPARTNERNAME TEXT,
+            ZLASTMESSAGEDATE REAL,
+            ZUNREADCOUNT INTEGER,
+            ZARCHIVED INTEGER,
+            ZHIDDEN INTEGER,
+            ZSESSIONTYPE INTEGER
+        );
+        CREATE TABLE ZWAMESSAGE (
+            Z_PK INTEGER PRIMARY KEY,
+            ZCHATSESSION INTEGER,
+            ZFROMJID TEXT,
+            ZISFROMME INTEGER,
+            ZMESSAGEDATE REAL,
+            ZTEXT TEXT,
+            ZSTANZAID TEXT,
+            ZMESSAGETYPE INTEGER,
+            ZSTARRED INTEGER,
+            ZDELETED INTEGER,
+            ZMEDIAITEM INTEGER
+        );
+        """
+    )
+    conn.execute(
+        "INSERT INTO ZWACHATSESSION VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (1, "15550100001@s.whatsapp.net", "Alex Example", 0, 0, 0, 0, 1),
+    )
+    conn.execute(
+        "INSERT INTO ZWAMESSAGE VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (1, 1, "15550100001@s.whatsapp.net", 0, 0, "before", "stanza-before", 0, 0, 0, None),
+    )
+    conn.commit()
+    conn.close()
+    return data_root
+
