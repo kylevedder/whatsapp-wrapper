@@ -122,6 +122,22 @@ def test_direct_phone_send_degrades_to_unverified_without_database(tmp_path):
     assert result.error and result.error.startswith("verification unavailable:")
 
 
+def test_phone_send_uses_existing_lid_chat_name_for_confirmation(tmp_path):
+    data_root = _send_fixture(tmp_path)
+    _add_contacts_and_lid_chat(data_root)
+    sender = RecordingSender()
+    client = WhatsAppClient(data_root=data_root, sender=sender)
+
+    result = client.send(to="+1 (555) 010-0002", text="preview", dry_run=True)
+
+    assert result.dry_run is True
+    assert result.recipient == "15550100002@s.whatsapp.net"
+    target = client._resolve_send_chat(to="+1 (555) 010-0002", chat_id=None, jid=None)
+    assert target.id == 2
+    assert target.display_name == "Alex Example"
+    assert target.jid and target.jid.phone == "15550100002"
+
+
 def test_client_verifies_sent_row_from_database(tmp_path):
     data_root = _send_fixture(tmp_path)
 
@@ -189,3 +205,36 @@ def _send_fixture(tmp_path):
     conn.commit()
     conn.close()
     return data_root
+
+
+def _add_contacts_and_lid_chat(data_root):
+    conn = sqlite3.connect(data_root / "ChatStorage.sqlite")
+    conn.execute(
+        "INSERT INTO ZWACHATSESSION VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (2, "112233@lid", "Alex Example", 0, 0, 0, 0, 1),
+    )
+    conn.commit()
+    conn.close()
+
+    conn = sqlite3.connect(data_root / "ContactsV2.sqlite")
+    conn.executescript(
+        """
+        CREATE TABLE ZWAADDRESSBOOKCONTACT (
+            Z_PK INTEGER PRIMARY KEY,
+            ZWHATSAPPID TEXT,
+            ZPHONENUMBER TEXT,
+            ZLID TEXT,
+            ZFIRSTNAME TEXT,
+            ZLASTNAME TEXT,
+            ZFULLNAME TEXT,
+            ZNICKNAME TEXT,
+            ZORGANIZATION TEXT
+        );
+        """
+    )
+    conn.execute(
+        "INSERT INTO ZWAADDRESSBOOKCONTACT VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (1, "15550100002@s.whatsapp.net", "+1 (555) 010-0002", "112233@lid", "Alex", "Example", "Alex Example", None, None),
+    )
+    conn.commit()
+    conn.close()

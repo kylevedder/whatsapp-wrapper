@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import sqlite3
 import time
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
@@ -807,6 +808,16 @@ class WhatsAppClient:
             target_jid = Jid.parse(phone) if phone else None
         if not target_jid:
             raise core.WhatsAppError("could not resolve send target")
+        if target_jid.kind == "phone":
+            contact = self.resolve_contact(target_jid)
+            if contact:
+                for candidate in contact.raw_jids:
+                    try:
+                        existing = self.chat(jid=candidate)
+                    except core.WhatsAppError:
+                        existing = None
+                    if existing and existing.kind == "direct":
+                        return replace(existing, jid=target_jid)
         try:
             existing = self.chat(jid=target_jid)
         except core.WhatsAppError:
