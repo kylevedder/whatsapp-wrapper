@@ -217,12 +217,30 @@ def coerce_bool(value: Any) -> bool:
 
 WHATSAPP_MESSAGE_TYPE_NAMES: dict[int, str] = {
     0: "text",
+    1: "image",
+    2: "video",
+    3: "voice_message",
+    4: "contact_card",
+    5: "location",
+    6: "group_event",
+    7: "url",
+    8: "file",
+    10: "system_information",
     28: "disappearing_messages_notice",
     59: "video_call",
 }
 
 
 WHATSAPP_MESSAGE_TYPE_DISPLAY_TEXT: dict[int, str] = {
+    1: "Image",
+    2: "Video",
+    3: "Voice message",
+    4: "Contact card",
+    5: "Location",
+    6: "Group event",
+    7: "Link",
+    8: "File",
+    10: "System information message",
     28: "Disappearing messages setting changed",
     59: "Video call",
 }

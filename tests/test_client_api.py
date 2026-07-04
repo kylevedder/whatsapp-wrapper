@@ -208,13 +208,15 @@ def test_messages_filter_deleted_search_and_attachments(whatsapp_fixture):
     assert [hit.id for hit in hits] == [1]
 
 
-def test_message_type_display_text_for_call_and_system_rows(whatsapp_fixture):
+def test_message_type_display_text_for_known_non_text_rows(whatsapp_fixture):
     conn = sqlite3.connect(whatsapp_fixture / "ChatStorage.sqlite")
     conn.executemany(
         "INSERT INTO ZWAMESSAGE VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
+            (19, 1, "15550100001@s.whatsapp.net", 0, _ts(2026, 1, 2, 12), None, "stanza-info", 10, 0, 0, None),
             (20, 1, None, 1, _ts(2026, 1, 2, 13), None, "stanza-system", 28, 0, 0, None),
             (21, 1, "15550100001@s.whatsapp.net", 0, _ts(2026, 1, 2, 14), None, "stanza-call", 59, 0, 0, None),
+            (22, 1, None, 1, _ts(2026, 1, 2, 15), "https://example.test", "stanza-url", 7, 0, 0, None),
         ],
     )
     conn.commit()
@@ -223,11 +225,15 @@ def test_message_type_display_text_for_call_and_system_rows(whatsapp_fixture):
 
     messages = client.messages(1, limit=5)
 
-    assert messages[0].type_name == "video_call"
-    assert messages[0].display_text == "Video call"
-    assert messages[0].text == ""
-    assert messages[1].type_name == "disappearing_messages_notice"
-    assert messages[1].display_text == "Disappearing messages setting changed"
+    assert messages[0].type_name == "url"
+    assert messages[0].display_text == "https://example.test"
+    assert messages[1].type_name == "video_call"
+    assert messages[1].display_text == "Video call"
+    assert messages[1].text == ""
+    assert messages[2].type_name == "disappearing_messages_notice"
+    assert messages[2].display_text == "Disappearing messages setting changed"
+    assert messages[3].type_name == "system_information"
+    assert messages[3].display_text == "System information message"
 
 
 def test_iter_messages_messages_after_and_watch(whatsapp_fixture):
